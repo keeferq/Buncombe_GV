@@ -5,7 +5,7 @@
 ### The main interactions of this map are 
   + Gun Violence incidents displayed at the point level
     + The points are scaled based on the total number of victims of the incident (total fatalities + total injured)
-    + The point symbols differ if there were or were not fatalities in the incident (skull representing a fatalitiy while the bandaged person means there were only injured people
+    + The point symbols differ if there were or were not fatalities in the incident (skull representing a fatality while the bandaged person means there were only injured people
     + The points can be clicked on to display more information about the incident
   + The layer can be filtered and toggled in the top right to filter out injured, killed, or toggle the chloropleth
   + Time Slider
