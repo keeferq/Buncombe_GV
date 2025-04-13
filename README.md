@@ -12,8 +12,12 @@
     + Utilizing the dates attached to each incident to allow for filtering based on year
     + When scrubbing through the years a chart is also made to show the distribution of the crimes by month
 
+### Data Sources
+##### The data for this map came from the gun violence archive, this dataset goes from 2014-2023 and includes data for the entire country. For my use case it was processed and filtered in RStudio to just Buncombe county. 
+##### Data for the chloropleth base map was acquired from Social Explorer using the American Community Survey's latest dataset at the block group level. This dataset was then joined with a shapefile for the block groups to create the chloropleth.
 
+### Libraries Used
+ + Leaflet CSS and JS
+ + Font Awesome
+ + Chroma JS
 
-write up a ~150 word project description as a readme.md file using Markdown language. This will introduce the project
-name, a brief introduction, the major functions, libraries, data sources, and other necessary information. Note, this
-requirement only applies to the second map you create;
