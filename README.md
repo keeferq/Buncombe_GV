@@ -8,10 +8,9 @@
     + The point symbols differ if there were or were not fatalities in the incident (skull representing a fatalitiy while the bandaged person means there were only injured people
     + The points can be clicked on to display more information about the incident
   + The layer can be filtered and toggled in the top right to filter out injured, killed, or toggle the chloropleth
-
-## Time Slider
-  + Utilizing the dates attached to each incident to allow for filtering based on year
-  + When scrubbing through the years a chart is also made to show the distribution of the crimes by month
+  + Time Slider
+    + Utilizing the dates attached to each incident to allow for filtering based on year
+    + When scrubbing through the years a chart is also made to show the distribution of the crimes by month
 
 
 
