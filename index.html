@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Buncombe County Gun Violence and Median Income</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.1.2/chroma.min.js"></script>
+
+    <style>
+        /*   Basic Styles   */
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: Arial, sans-serif; }
+        #map { height: 100%; }
+
+        /*   Container Styles    */
+        .legend-container, #monthly-chart-container, #time-slider-container {
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            border-radius: 5px;
+            transition: all 0.3s ease;
+            font-size: 12px;
+        }
+
+        /*   Legend styles   */
+        .legend-container { position: absolute; z-index: 750; width: 200px; }
+        .point-legend-container { top: 10px; left: 10px; }
+        .polygon-legend-container { bottom: 10px; left: 10px; }
+
+        .legend-toggle-button {
+            background: #f8f8f8; color: #333; padding: 6px 10px; font-weight: bold;
+            border-bottom: 1px solid #ccc; border-radius: 5px 5px 0 0; cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 13px;
+        }
+        .legend-toggle-button i { margin-left: 8px; transition: transform 0.3s ease; }
+        .legend-toggle-button.collapsed i { transform: rotate(-90deg); }
+
+        .legend-content { padding: 8px 12px; line-height: 1.5; overflow: hidden; max-height: 300px; opacity: 1; }
+        .legend-content.hidden { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; border-top: none; }
+        .legend-content h4 { margin: 0 0 8px; font-size: 13px; text-align: center; }
+        .legend-content div { display: flex; align-items: center; margin-bottom: 4px; }
+
+        /* Point legend */
+        .point-legend-content i.legend-icon { width: 22px; text-align: center; margin-right: 8px; font-size: 16px; vertical-align: middle; flex-shrink: 0; }
+        .point-legend-content hr { margin: 6px 0; border: 0; border-top: 1px solid #ddd; }
+        .point-legend-content .legend-description { font-style: italic; text-align: center; font-size: 11px; margin-top: 5px; display: block; }
+
+        /* Polygon legend */
+        .poly-legend-swatch { display: inline-block; width: 18px; height: 18px; margin-right: 8px; border: 1px solid #ccc; flex-shrink: 0; }
+        .polygon-legend-content div > span:last-child { flex-grow: 1; }
+
+        /* Leaflet control popup  */
+        .leaflet-popup-pane { z-index: 700 !important; }
+        .leaflet-control-container .leaflet-top.leaflet-right { top: 10px; }
+        .leaflet-control-zoom { display: none; }
+        .leaflet-control-layers-expanded { padding: 6px 10px; background: white; max-height: calc(100vh - 100px); overflow-y: auto; }
+        .leaflet-control-layers label { display: flex; align-items: center; padding: 3px 0; font-size: 13px; cursor: pointer; }
+        .leaflet-control-layers label span { vertical-align: middle; }
+        .leaflet-control-layers-selector { margin-top: 2px; margin-right: 6px; vertical-align: middle; }
+        .leaflet-control-layers-overlays label span i { margin-right: 6px; vertical-align: middle; width: 18px; text-align: center; }
+
+        /*   Chart location */
+        #controls-container { position: absolute; bottom: 20px; right: 10px; z-index: 790; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+
+        /*   Chart Container   */
+        #monthly-chart-container { width: 300px; max-height: 200px; padding: 12px; font-size: 10px; display: flex; flex-direction: column; overflow: hidden; order: -1; }
+        #monthly-chart-container.hidden { opacity: 0; pointer-events: none; height: 0; padding: 0; border: none; margin: 0; max-height: 0; }
+        #stats-display { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee; text-align: center; font-size: 12px; font-weight: bold; flex-shrink: 0; }
+        #stats-display span { margin: 0 10px; }
+        #monthly-chart-container h5 { margin: 0 0 8px 0; text-align: center; font-size: 12px; font-weight: bold; flex-shrink: 0; }
+        .chart-area { display: flex; justify-content: space-around; align-items: flex-end; height: 100%; border-bottom: 1px solid #ccc; flex-grow: 1; min-height: 60px; }
+        .chart-bar-container { display: flex; flex-direction: column; align-items: center; text-align: center; width: 18px; }
+        .chart-bar { background-color: #4682B4; width: 14px; margin-bottom: 2px; transition: height 0.3s ease-out; position: relative; }
+        .chart-label { margin-top: 3px; font-size: 9px; }
+
+        /*   Time Slider Container   */
+        #time-slider-container { width: 300px; height: auto; padding: 10px 15px; display: flex; align-items: center; }
+        #time-slider-container label { margin-right: 10px; white-space: nowrap; font-weight: bold; }
+        #time-slider { flex-grow: 1; margin: 0 10px; cursor: pointer; }
+        #time-slider:disabled { cursor: not-allowed; opacity: 0.6; }
+        #time-slider-label { min-width: 60px; text-align: center; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="controls-container">
+        <div id="monthly-chart-container" class="hidden">
+            <div id="stats-display">
+                <span id="stats-fatalities">Fatalities: --</span>
+                <span id="stats-injuries">Injuries: --</span>
+            </div>
+            <h5 id="chart-title">Incidents by Month</h5>
+            <div class="chart-area" id="chart-area"></div>
+        </div>
+        <div id="time-slider-container">
+            <label for="time-slider">Year:</label>
+            <input type="range" id="time-slider" min="0" max="0" step="1" value="0" disabled>
+            <span id="time-slider-label">Loading...</span>
+        </div>
+    </div>
+
+    <script>
+        // Map setup
+        const map = L.map('map', { zoomControl: false }).setView([35.6, -82.55], 11);
+        map.createPane('polygonPane').style.zIndex = 450;
+        map.createPane('pointPane').style.zIndex = 460;
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: 'Data from <a href="https://www.gunviolencearchive.org/">Gun Violence Archive</a> and <a href="https://www.socialexplorer.com/tables/C2020"> Social Explorer</a> | Created By: Quinn Keefer | © OpenStreetMap contributors © CARTO', 
+            maxZoom: 19
+        }).addTo(map);
+
+        // Layers groups
+        const blockGroupLayer = L.layerGroup();
+        const fatalPointsLayer = L.layerGroup();
+        const injuryOnlyPointsLayer = L.layerGroup();
+        const unknownPointsLayer = L.layerGroup();
+
+        // Data arrays
+        let polygonLegendControl, pointLegendControl;
+        let blockGroupGeoJSON;
+        let allMarkersInfo = [];
+        let aggregateMonthlyCounts = Array(12).fill(0);
+        let minYear = null;
+        let maxYear = null;
+        let polyMinVal = undefined;
+        let polyMaxVal = undefined;
+
+        // Constants 
+        const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const MONTH_NAMES_SHORT = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+        const ALL_YEARS_VALUE_OFFSET = 1;
+        const slider = document.getElementById('time-slider');
+        const sliderLabel = document.getElementById('time-slider-label');
+        const statsFatalitiesEl = document.getElementById('stats-fatalities');
+        const statsInjuriesEl = document.getElementById('stats-injuries');
+        const chartContainer = document.getElementById('monthly-chart-container');
+        const chartArea = document.getElementById('chart-area');
+        const chartTitle = document.getElementById('chart-title');
+
+        //   Polygon Class constant
+        const MEDIAN_INCOME_BREAKS = [30000, 45000, 60000, 75000, 90000, 105000]; // upper bounds
+        const POLYGON_FILL_OPACITY = 0.65;
+        const NA_FILL_COLOR = '#AAA';
+        const NA_FILL_OPACITY = 0.3;
+        const NA_STYLE = {
+            fillColor: NA_FILL_COLOR, weight: 1, opacity: 0.5, color: 'white',
+            fillOpacity: NA_FILL_OPACITY, pane: 'polygonPane', interactive: false
+        };
+
+        // Generate colors from blues scale
+        const polyColorScale = chroma.scale('Blues');
+        const CLASS_COLORS_HEX = [
+            polyColorScale(0.08).hex(), 
+            polyColorScale(0.22).hex(),
+            polyColorScale(0.36).hex(),
+            polyColorScale(0.50).hex(),
+            polyColorScale(0.64).hex(),
+            polyColorScale(0.78).hex(),
+            polyColorScale(0.92).hex()  
+        ];
+
+        // Helper Functions
+        // Formats a number for display, handling null/undefined/NaN
+        function formatStat(value) {
+            return (value === null || value === undefined || isNaN(value)) ? '--' : value.toLocaleString();
+        }
+
+        // Set up the expand/collapse functionality for the legend
+        function setupLegendToggle(containerId, buttonId, contentId) {
+            const button = document.getElementById(buttonId);
+            const content = document.getElementById(contentId);
+            if (button && content) {
+                button.addEventListener('click', () => {
+                    content.classList.toggle('hidden');
+                    button.classList.toggle('collapsed');
+                });
+                // Ensure legends start expanded by default if they exist
+                content.classList.remove('hidden');
+                button.classList.remove('collapsed');
+            } 
+        }
+
+        // Parses 'DD-Mon-YY' into a UTC Date object
+        function parseDateString(dateStr) {
+            if (!dateStr) return null;
+            const parts = dateStr.split('-');
+            if (parts.length !== 3) return null;
+
+            const day = parseInt(parts[0], 10);
+            const monthIndex = MONTH_NAMES.findIndex(m => m.toLowerCase() === parts[1].toLowerCase());
+            let year = parseInt(parts[2], 10);
+
+            if (isNaN(day) || monthIndex === -1 || isNaN(year)) return null;
+
+            // Handle YY vs YYYY year format
+            year = (year < 70) ? 2000 + year : (year < 100 ? 1900 + year : year);
+
+            try {
+                // Use UTC to standardize
+                return new Date(Date.UTC(year, monthIndex, day));
+            } catch (e) {
+                console.error("Error parsing date:", dateStr, e);
+                return null;
+            }
+        }
+
+        //Defines the style for each polygon based on income classes.
+        function stylePolygon(feature) {
+            const value = feature.properties.SE_A14006_001; 
+
+            if (value === null || value === undefined || isNaN(value)) {
+                return NA_STYLE;
+            }
+
+            let classIndex = 0; 
+
+            // Determine class index (0-6) based on income value and 6 breaks
+            if (value > MEDIAN_INCOME_BREAKS[5]) {       // > 105k
+                classIndex = 6;
+            } else if (value > MEDIAN_INCOME_BREAKS[4]) { // > 90k and <= 105k
+                classIndex = 5;
+            } else if (value > MEDIAN_INCOME_BREAKS[3]) { // > 75k and <= 90k
+                classIndex = 4;
+            } else if (value > MEDIAN_INCOME_BREAKS[2]) { // > 60k and <= 75k
+                classIndex = 3;
+            } else if (value > MEDIAN_INCOME_BREAKS[1]) { // > 45k and <= 60k
+                classIndex = 2;
+            } else if (value > MEDIAN_INCOME_BREAKS[0]) { // > 30k and <= 45k
+                classIndex = 1;
+            } else {                                      // <= 30k
+                classIndex = 0;
+            }
+
+            // Return style object using the determined class color and standard opacity
+            return {
+                fillColor: CLASS_COLORS_HEX[classIndex],
+                weight: 1,
+                opacity: 1, 
+                color: 'white',
+                fillOpacity: POLYGON_FILL_OPACITY,
+                pane: 'polygonPane',
+                interactive: false
+            };
+        }
+
+
+        //Creates and adds the polygon legend control
+        function createPolygonLegend(hasNulls) {
+            if (polygonLegendControl && map.hasControl(polygonLegendControl)) {
+                map.removeControl(polygonLegendControl);
+            }
+
+            polygonLegendControl = L.control({ position: 'bottomleft' });
+            polygonLegendControl.onAdd = function(map) {
+                const container = L.DomUtil.create('div', 'polygon-legend-container legend-container');
+                container.id = 'polygon-legend';
+
+                const button = L.DomUtil.create('div', 'legend-toggle-button', container);
+                button.id = 'polygon-legend-toggle';
+                button.innerHTML = `Median Income <i class="fas fa-chevron-down"></i>`;
+
+                const content = L.DomUtil.create('div', 'polygon-legend-content legend-content', container);
+                content.id = 'polygon-legend-content';
+
+                let legendHtml = '';
+                const useMinMaxForLabels = !(polyMinVal === undefined || polyMaxVal === undefined || isNaN(polyMinVal) || isNaN(polyMaxVal));
+
+                 if (!useMinMaxForLabels && CLASS_COLORS_HEX.length === 0) {
+                     legendHtml += '<div>No income data available</div>';
+                 } else {
+                     let lowerBound = useMinMaxForLabels ? polyMinVal : 0; 
+
+                     // Loop through the classes
+                     for (let i = 0; i < CLASS_COLORS_HEX.length; i++) {
+                         const baseColorHex = CLASS_COLORS_HEX[i];
+                         const swatchColor = chroma(baseColorHex).alpha(POLYGON_FILL_OPACITY).css();
+
+                         let upperBound;
+                         let label;
+
+                         if (i < MEDIAN_INCOME_BREAKS.length) {
+                              // Classes by upper breaks
+                              upperBound = MEDIAN_INCOME_BREAKS[i];
+                              label = `$${Math.round(lowerBound).toLocaleString()} - $${Math.round(upperBound).toLocaleString()}`;
+                          } else {
+                              // Last class goes to maxVal
+                              upperBound = useMinMaxForLabels ? polyMaxVal : MEDIAN_INCOME_BREAKS[MEDIAN_INCOME_BREAKS.length - 1];
+                              label = `$${Math.round(lowerBound).toLocaleString()} +`;
+                          }
+
+                         legendHtml += `<div><span class="poly-legend-swatch" style="background:${swatchColor}"></span> <span>${label}</span></div>`;
+                         lowerBound = upperBound; // Set lower bound for the next class label
+                     }
+                 }
+
+                if (hasNulls) {
+                    const naSwatchColor = chroma(NA_FILL_COLOR).alpha(NA_FILL_OPACITY).css();
+                    legendHtml += `<div><span class="poly-legend-swatch" style="background:${naSwatchColor}"></span> <span>N/A</span></div>`;
+                }
+
+                content.innerHTML = legendHtml;
+                L.DomEvent.disableClickPropagation(container);
+                L.DomEvent.disableScrollPropagation(container);
+                setTimeout(() => setupLegendToggle('polygon-legend', 'polygon-legend-toggle', 'polygon-legend-content'), 0);
+
+                return container;
+            };
+            polygonLegendControl.addTo(map);
+        }
+
+
+        // Point Layer Logic
+        // Creates a styled marker icon based on incident properties 
+        function createPointIconMarker(feature, latlng) {
+            const killed = feature.properties['x Victims Killed'];
+            const injured = feature.properties['x Victims Injured'];
+            const hasKilledData = !(killed === null || killed === undefined || isNaN(killed));
+            const hasInjuredData = !(injured === null || injured === undefined || isNaN(injured));
+            const totalVictims = (killed ?? 0) + (injured ?? 0); 
+
+            let iconClass, iconColor, iconSize;
+            let zOffset = 500; 
+            const baseSize = 16;
+            const sizeIncrement = 2; // How much size increases per additional victim
+
+            // Determine icon based on victim counts
+            if (hasKilledData && killed > 0) {
+                iconClass = 'fa-solid fa-skull';
+                iconColor = '#B71C1C';
+                iconSize = baseSize + Math.max(0, (totalVictims - 1) * sizeIncrement);
+                zOffset = 1000; // Fatalities appear on top of injuries
+            } else if (hasInjuredData && injured > 0) {
+                iconClass = 'fa-solid fa-user-injured';
+                iconColor = '#F57F17'; 
+                iconSize = baseSize + Math.max(0, (totalVictims - 1) * sizeIncrement);
+            } else { // No fatalities and no injuries 
+                iconClass = 'fa-solid fa-question-circle';
+                iconColor = '#777'; 
+                iconSize = baseSize * 0.8; 
+            }
+
+            const iconHtml = `<i class="${iconClass}" style="font-size: ${iconSize}px; color: ${iconColor};"></i>`;
+            const divIcon = L.divIcon({
+                html: iconHtml,
+                className: 'custom-div-icon',
+                iconSize: [iconSize * 1.2, iconSize * 1.2], // Slightly larger area to click on for popup
+                iconAnchor: [iconSize * 0.6, iconSize * 1.2], 
+                popupAnchor: [0, -iconSize * 1.1] 
+            });
+
+            return L.marker(latlng, { icon: divIcon, pane: 'pointPane', zIndexOffset: zOffset });
+        }
+
+        // Creates popup content for each point feature
+        function onEachPointFeature(feature, layer) {
+            if (feature.properties) {
+                const props = feature.properties;
+                const killedDisplay = props['x Victims Killed'];
+                const injuredDisplay = props['x Victims Injured'];
+                const totalVictims = (killedDisplay ?? 0) + (injuredDisplay ?? 0);
+
+                const popupContent = `
+                    <b>Date:</b> ${props.Date || 'N/A'}<br>
+                    <b>Address:</b> ${props.Address || 'N/A'}<br>
+                    <b>Killed:</b> ${killedDisplay !== null && killedDisplay !== undefined ? killedDisplay : 'N/A'}<br>
+                    <b>Injured:</b> ${injuredDisplay !== null && injuredDisplay !== undefined ? injuredDisplay : 'N/A'}<br>
+                    <b>Total Victims:</b> ${totalVictims}<br>
+                    <i>${props['Incident Characteristics'] || ''}</i>`;
+                layer.bindPopup(popupContent);
+            }
+        }
+
+        // Creates and adds the point legend control to the map
+         function createPointLegend(hasFatalLayer, hasInjuryLayer) {
+            if (pointLegendControl && map.hasControl(pointLegendControl)) {
+                map.removeControl(pointLegendControl);
+            }
+
+            pointLegendControl = L.control({ position: 'topleft' });
+            pointLegendControl.onAdd = function (map) {
+                const container = L.DomUtil.create('div', 'point-legend-container legend-container');
+                container.id = 'point-legend';
+
+                const button = L.DomUtil.create('div', 'legend-toggle-button', container);
+                button.id = 'point-legend-toggle';
+                button.innerHTML = `Incidents <i class="fas fa-chevron-down"></i>`;
+
+                const content = L.DomUtil.create('div', 'point-legend-content legend-content', container);
+                content.id = 'point-legend-content';
+                let legendHtml = '';
+
+                if (hasFatalLayer) legendHtml += `<div><i class="fa-solid fa-skull legend-icon" style="color: #B71C1C;"></i> Incident w/ Fatality</div>`;
+                if (hasInjuryLayer) legendHtml += `<div><i class="fa-solid fa-user-injured legend-icon" style="color: #F57F17;"></i> Incident w/ Injury Only</div>`;
+
+                const actuallyHasUnknown = allMarkersInfo.some(info => info.type === 'unknown');
+                if (actuallyHasUnknown) {
+                    legendHtml += `<div><i class="fa-solid fa-question-circle legend-icon" style="color: #777;"></i> Suspect Injured / No Data</div>`;
+                }
+
+                if (hasFatalLayer || hasInjuryLayer || actuallyHasUnknown) {
+                    legendHtml += `<hr><div class="legend-description">(Icon size scales with total victims)</div>`;
+                }
+
+                if (!hasFatalLayer && !hasInjuryLayer && !actuallyHasUnknown) {
+                    legendHtml = '<div>No incident data loaded</div>';
+                }
+
+                content.innerHTML = legendHtml;
+                L.DomEvent.disableClickPropagation(container);
+                L.DomEvent.disableScrollPropagation(container);
+                setTimeout(() => setupLegendToggle('point-legend', 'point-legend-toggle', 'point-legend-content'), 0);
+
+                return container;
+            };
+            pointLegendControl.addTo(map);
+        }
+
+
+
+        // Chart Rendering Logic
+        // Renders the monthly incident bar chart 
+        function renderMonthlyChart(monthCounts, titleText) {
+            chartArea.innerHTML = ''; // Clears previous chart
+            chartTitle.textContent = titleText;
+
+            const maxCount = Math.max(1, ...monthCounts); // Ensure max is at least 1
+            const chartAreaHeight = chartArea.clientHeight || 80; 
+            const allZero = monthCounts.every(count => count === 0);
+
+            if (allZero) {
+                chartArea.innerHTML = '<div style="text-align:center; width: 100%; font-style: italic; font-size: 10px; align-self: center;">No incidents to display for this selection.</div>';
+                return;
+            }
+
+            monthCounts.forEach((count, index) => {
+                const barHeightPercentage = (count / maxCount) * 100;
+                const barHeightPx = Math.max( (barHeightPercentage / 100) * (chartAreaHeight * 0.85), count > 0 ? 2 : 0 ); 
+
+                const barContainer = document.createElement('div'); barContainer.className = 'chart-bar-container';
+                const bar = document.createElement('div'); bar.className = 'chart-bar'; bar.style.height = `${barHeightPx}px`; bar.title = `${MONTH_NAMES[index]}: ${count} incident(s)`;
+                const label = document.createElement('div'); label.className = 'chart-label'; label.textContent = MONTH_NAMES_SHORT[index];
+
+                barContainer.appendChild(bar);
+                barContainer.appendChild(label);
+                chartArea.appendChild(barContainer);
+            });
+        }
+
+        // Map Update Logic
+        //Updates map markers, stats, and chart based on the selected slider value
+        function updateMapForDisplay(sliderValue) {
+            if (minYear === null || maxYear === null) return; 
+
+            const showAllYears = sliderValue === (maxYear + ALL_YEARS_VALUE_OFFSET);
+            const displayYear = showAllYears ? 'All Years' : sliderValue;
+            const chartTitleYear = showAllYears ? `All Years (${minYear}-${maxYear})` : sliderValue.toString();
+
+            let yearStart, yearEnd;
+            let currentTotalFatalities = 0;
+            let currentTotalInjuries = 0;
+            let currentMonthCounts = Array(12).fill(0); // Counts for the specific year/period
+
+            if (!showAllYears) {
+                yearStart = new Date(Date.UTC(sliderValue, 0, 1)); // Start of year
+                yearEnd = new Date(Date.UTC(sliderValue + 1, 0, 1)); // Start of next year
+            }
+
+            // Clear existing point layers
+            fatalPointsLayer.clearLayers();
+            injuryOnlyPointsLayer.clearLayers();
+            unknownPointsLayer.clearLayers();
+
+            // Filter markers and calculate stats/counts
+            allMarkersInfo.forEach(info => {
+                const markerDate = info.jsDate;
+                const isValidDate = markerDate instanceof Date && !isNaN(markerDate);
+
+                let isVisible = false;
+                if (showAllYears) {
+                    isVisible = true;
+                } else if (isValidDate) {
+                    isVisible = markerDate >= yearStart && markerDate < yearEnd;
+                }
+
+                if (isVisible) {
+                    // Add marker to appropriate layer
+                    let targetLayer = unknownPointsLayer;
+                    if (info.type === 'fatal') targetLayer = fatalPointsLayer;
+                    else if (info.type === 'injury') targetLayer = injuryOnlyPointsLayer;
+                    targetLayer.addLayer(info.marker);
+
+                    // Accumulate stats for the current view
+                    currentTotalFatalities += info.fatalities;
+                    currentTotalInjuries += info.injuries;
+
+                    // Accumulate monthly counts if date is valid
+                    if (isValidDate) {
+                         if (!showAllYears) {
+                             // Count for the specific year being shown
+                             currentMonthCounts[markerDate.getUTCMonth()]++;
+                         }
+                    }
+                }
+            });
+
+            // Update stats display
+            statsFatalitiesEl.textContent = `Fatalities: ${formatStat(currentTotalFatalities)}`;
+            statsInjuriesEl.textContent = `Injuries: ${formatStat(currentTotalInjuries)}`;
+
+            // Render the chart
+            const countsToRender = showAllYears ? aggregateMonthlyCounts : currentMonthCounts;
+            renderMonthlyChart(countsToRender, `Incidents by Month (${chartTitleYear})`);
+
+            // Ensure chart is visible if data exists
+             if (allMarkersInfo.length > 0 && chartContainer.classList.contains('hidden')) {
+                 chartContainer.classList.remove('hidden');
+             }
+        }
+
+
+        // Event Listeners
+
+        // Listener for the Time Slider Input
+        slider.addEventListener('input', (e) => {
+            const selectedValue = parseInt(e.target.value, 10);
+            const isAllYears = selectedValue === (maxYear + ALL_YEARS_VALUE_OFFSET);
+
+            // Update Slider Label
+            sliderLabel.textContent = isAllYears ? "All Years" : selectedValue;
+
+            // Update Map Display
+            updateMapForDisplay(selectedValue);
+        });
+
+
+        // Data Loading and Initialization
+
+        // Load Polygon Data
+        fetch('assets/buncombe_block.geojson')
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error loading polygons! ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                // Calculate min/max and check for nulls
+                const values = data.features
+                    .map(f => f.properties.SE_A14006_001)
+                    .filter(v => v != null && !isNaN(v));
+                const hasNulls = data.features.length > values.length;
+                // Store min/max globally for legend labels
+                polyMinVal = values.length > 0 ? Math.min(...values) : undefined;
+                polyMaxVal = values.length > 0 ? Math.max(...values) : undefined;
+
+                // Create GeoJSON layer with discrete styling
+                blockGroupGeoJSON = L.geoJSON(data, {
+                    style: stylePolygon
+                });
+
+                blockGroupLayer.clearLayers().addLayer(blockGroupGeoJSON);
+                // Create legend using discrete class info
+                createPolygonLegend(hasNulls);
+            });
+            
+
+        // Load Point Data
+        fetch('assets/buncombe_points.geojson')
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error loading points! ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                // Reset data stores
+                fatalPointsLayer.clearLayers();
+                injuryOnlyPointsLayer.clearLayers();
+                unknownPointsLayer.clearLayers();
+                allMarkersInfo = [];
+                aggregateMonthlyCounts.fill(0);
+                minYear = null;
+                maxYear = null;
+
+                // Process each point feature
+                data.features.forEach(feature => {
+                    if (!feature.geometry || !feature.geometry.coordinates) return;
+                    const coords = feature.geometry.coordinates;
+                    if (coords.length < 2 || isNaN(coords[0]) || isNaN(coords[1])) return;
+                    const latlng = L.latLng(coords[1], coords[0]); 
+
+                    const jsDate = parseDateString(feature.properties.Date);
+                    const isValidDate = jsDate instanceof Date && !isNaN(jsDate);
+
+                    // Track year range and aggregate counts
+                    if (isValidDate) {
+                        const year = jsDate.getUTCFullYear();
+                        if (minYear === null || year < minYear) minYear = year;
+                        if (maxYear === null || year > maxYear) maxYear = year;
+                        aggregateMonthlyCounts[jsDate.getUTCMonth()]++;
+                    }
+
+                    const marker = createPointIconMarker(feature, latlng);
+                    onEachPointFeature(feature, marker);
+
+                    // Determine point type
+                    const killed = feature.properties['x Victims Killed'];
+                    const injured = feature.properties['x Victims Injured'];
+                    const hasKilledData = !(killed === null || killed === undefined || isNaN(killed));
+                    const hasInjuredData = !(injured === null || injured === undefined || isNaN(injured));
+                    let type = 'unknown';
+                    if (hasKilledData && killed > 0) type = 'fatal';
+                    else if (hasInjuredData && injured > 0) type = 'injury';
+
+                    // Store marker info
+                    allMarkersInfo.push({
+                        marker: marker, jsDate: jsDate, type: type,
+                        fatalities: (hasKilledData ? killed : 0),
+                        injuries: (hasInjuredData ? injured : 0)
+                    });
+                });
+
+                console.log(`Points processed: ${allMarkersInfo.length}. Year range: ${minYear}-${maxYear}`);
+
+                // Create point legend based on processed types
+                const hasFatal = allMarkersInfo.some(info => info.type === 'fatal');
+                const hasInjury = allMarkersInfo.some(info => info.type === 'injury');
+                createPointLegend(hasFatal, hasInjury);
+
+                // Add point layers (initially empty until updateMapForDisplay)
+                fatalPointsLayer.addTo(map);
+                injuryOnlyPointsLayer.addTo(map);
+                unknownPointsLayer.addTo(map);
+
+                // Configure Slider
+                if (minYear !== null && maxYear !== null) {
+                    slider.min = minYear;
+                    slider.max = maxYear + ALL_YEARS_VALUE_OFFSET;
+                    slider.value = maxYear + ALL_YEARS_VALUE_OFFSET; // Start at "All Years"
+                    sliderLabel.textContent = "All Years";
+                    slider.disabled = false;
+
+                    // Initial map display for "All Years"
+                    updateMapForDisplay(maxYear + ALL_YEARS_VALUE_OFFSET);
+                    chartContainer.classList.remove('hidden');
+
+                    console.log(`Initialization complete. Slider range ${minYear}-${maxYear} (+ All Years).`);
+                } else {
+                    // Handle no valid date data
+                    sliderLabel.textContent = "No Dates";
+                    slider.disabled = true;
+                    chartContainer.classList.add('hidden');
+                    statsFatalitiesEl.textContent = 'Fatalities: N/A';
+                    statsInjuriesEl.textContent = 'Injuries: N/A';
+                    console.warn("No valid date data found in points data.");
+                    updateMapForDisplay(0); // Show map without time filtering
+                }
+            })
+            
+        // Layer Control Setup
+        const overlayLayers = {
+            "<span title='Incidents with one or more fatalities'><i class='fa-solid fa-skull' style='color: #B71C1C;'></i> Fatalities</span>": fatalPointsLayer,
+            "<span title='Incidents with only injuries reported'><i class='fa-solid fa-user-injured' style='color: #F57F17;'></i> Injuries Only</span>": injuryOnlyPointsLayer,
+            "<span title='Incidents with zero victims or no count data'><i class='fa-solid fa-question-circle' style='color: #777;'></i> Suspect Injured / No Data</span>": unknownPointsLayer,
+            "<span title='Median Income (Census Block Groups)'><i class='fa-solid fa-vector-square' style='color: #4682B4;'></i> Median Income</span>": blockGroupLayer
+        };
+        blockGroupLayer.addTo(map); // Show polygons by default
+        L.control.layers(null, overlayLayers, { collapsed: true, position: 'topright' }).addTo(map);
+
+    </script>
+</body>
+</html>
